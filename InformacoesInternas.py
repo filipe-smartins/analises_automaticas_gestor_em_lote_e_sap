@@ -1,69 +1,17 @@
-import win32com.client as win32  # pip install pywin32
-from datetime import date, timedelta, datetime  # pip install datetime
-from pyautogui import alert
+from datetime import date, datetime  # pip install datetime
 
 
-class Sap:
-    def __init__(self, objeto_clientes):
-        self.clientes = objeto_clientes
-        self.session = None
-
-    def conecta_no_sap(self):
-        sapgui = win32.GetObject("SAPGUI").GetScriptingEngine
-
-        try:
-            self.session = sapgui.FindById("ses[0]")
-            self.session.createSession()
-        except BaseException:  # pywintypes.com_error
-            alert("ERRO AO CONECTAR AO SAP. Certifique-se que o SAP esteja aberto, com a sessão 0 na tela inicial. "
-                  "Caso o erro persista, feche e reabra o SAP com uma janela única.")
-            self.conecta_no_sap()
-
-    def pega_lc_e_ar(self):
-        self.session.findById("wnd[0]/tbar[0]/okcd").Text = "ZBMFI313"
-        self.session.findById("wnd[0]").sendVKey(0)
-        limite_total = []
-        contas_a_receber = []
-        for indice in range(0, len(self.clientes.dados_clientes['Código SAP do Cliente'])):
-            self.session.findById("wnd[0]/usr/ctxtP_KUNNR").text = self.clientes.dados_clientes['Código SAP do Cliente'][indice]
-            self.session.findById("wnd[0]/tbar[1]/btn[8]").press()
-
-            linha = int(self.session.findById("wnd[0]/usr/cntlPAINEL/shellcont/shell/shellcont[1]/shell").RowCount) - 1
-            valor = self.session.findById("wnd[0]/usr/cntlPAINEL/shellcont/shell/shellcont[1]/shell").getcellvalue(
-                linha, "KLIMK").strip().replace('.', '').replace(',', '.')
-
-            if valor == '0.00' or valor == '':
-                valor = 0
-            else:
-                valor = int(float(valor))
-
-            limite_total.append(valor)
-
-            valor_ar = self.session.findById("wnd[0]/usr/cntlPAINEL/shellcont/shell/shellcont[1]/shell").getcellvalue(
-                linha, "DIVIDA").strip().replace('.', '').replace(',', '.')
-
-            if valor_ar == '0.00' or valor_ar == '':
-                valor_ar = 0
-            elif '-' in valor_ar:  # subistitui valores negativos por zero para evitar erros.
-                valor_ar = 0
-            else:
-                valor_ar = int(float(valor_ar))
-
-            contas_a_receber.append(valor_ar)
-
-            self.session.findById("wnd[0]/tbar[0]/btn[3]").press()
-        self.session.findById("wnd[0]/tbar[0]/btn[3]").press()
-        self.clientes.dados_clientes['Limite Anterior'] = limite_total
-        self.clientes.dados_clientes['Contas a Receber'] = contas_a_receber
+class InformacoesInternas:
+    def __init__(self):
+        self.a = None
 
     def calcula_historico_interno(self):
         # Busca informações do histórico interno do cliente:
-        historico_cliente = {}
 
-        for indice in range(0, len(self.clientes.dados_clientes['Código SAP do Cliente'])):
+        for i in range(0, len(self.clientes.dados_clientes['Código SAP do Cliente'])):
             self.session.findById("wnd[0]/tbar[0]/okcd").Text = "FD32"
             self.session.findById("wnd[0]").sendVKey(0)
-            self.session.findById("wnd[0]/usr/ctxtRF02L-KUNNR").text = self.clientes.dados_clientes['Código SAP do Cliente'][indice]
+            self.session.findById("wnd[0]/usr/ctxtRF02L-KUNNR").text = self.clientes.dados_clientes['Código SAP do Cliente'][i]
             self.session.findById("wnd[0]/usr/ctxtRF02L-KKBER").text = "acss"
 
             self.session.findById("wnd[0]/usr/chkRF02L-D0105").selected = False
@@ -148,15 +96,15 @@ class Sap:
                     O maior acúmulo foi de {max(valores_12meses, key=int)} KBRL ({round(max(valores_12meses, key=int) / 1000, 1)} milhões).
                     O valor total dos pagamentos neste período foi de {sum(valores_12meses)} KBRL ({round(sum(valores_12meses) / 1000, 1)} milhões).'''
 
-            if self.clientes.dados_clientes['Limite Anterior'][indice] // 1000 < 50 and self.clientes.dados_clientes['Contas a Receber'][indice] // 1000 < 50:
+            if self.clientes.dados_clientes['Limite Anterior'][i] // 1000 < 50 and self.clientes.dados_clientes['Contas a Receber'][i] // 1000 < 50:
                 texto_limite_e_ar = ''
             else:
                 texto_limite_e_ar = f'''
                 INFORMAÇÕES INTERNAS:
-                    O cliente possui atualmente limite de crédito de {self.clientes.dados_clientes['Limite Anterior'][indice] // 1000} KBRL e
-                    seu contas a receber é de {self.clientes.dados_clientes['Contas a Receber'][indice] // 1000} KBRL.'''
+                    O cliente possui atualmente limite de crédito de {self.clientes.dados_clientes['Limite Anterior'][i] // 1000} KBRL e
+                    seu contas a receber é de {self.clientes.dados_clientes['Contas a Receber'][i] // 1000} KBRL.'''
 
-            historico_cliente[self.clientes.dados_clientes['Código SAP do Cliente'][indice]] = texto_limite_e_ar + texto_pontualidade_12meses + texto_pontualidade
+            self.clientes.dados_clientes['historico_interno'][i] = texto_limite_e_ar + texto_pontualidade_12meses + texto_pontualidade
 
             # Volta para tela inicial do SAP
             self.session.findById("wnd[0]/tbar[0]/btn[15]").press()
@@ -165,9 +113,5 @@ class Sap:
             except:
                 pass
 
-        for cliente in historico_cliente[self.clientes.dados_clientes['Código SAP do Cliente'][indice]]:
-            print(cliente)
+            print(self.clientes.dados_clientes['historico_interno'][i])
 
-    conecta_no_sap()
-    pega_lc_e_ar()
-    calcula_historico_interno()
